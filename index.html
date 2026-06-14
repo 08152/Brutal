@@ -2,56 +2,38 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FULL FPS SYSTEM</title>
+<title>FPS ADVANCED BUILD</title>
 
 <style>
-body { margin:0; overflow:hidden; background:#87cfff; }
+body{margin:0;overflow:hidden;background:#87cfff;}
 
 #crosshair{
-  position:absolute;
-  top:50%;
-  left:50%;
-  width:10px;
-  height:10px;
-  transform:translate(-50%,-50%);
-  z-index:10;
+position:absolute;top:50%;left:50%;
+width:10px;height:10px;
+transform:translate(-50%,-50%);
+z-index:10;
 }
 #crosshair:before,#crosshair:after{
-  content:"";
-  position:absolute;
-  background:white;
+content:"";position:absolute;background:white;
 }
 #crosshair:before{width:2px;height:10px;left:4px;}
 #crosshair:after{width:10px;height:2px;top:4px;}
 
 #coords{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  color:white;
-  font-family:Arial;
-  font-size:13px;
-  background:rgba(0,0,0,0.4);
-  padding:6px;
-  border-radius:6px;
-  white-space:pre;
+position:absolute;bottom:10px;right:10px;
+color:white;font-family:Arial;font-size:13px;
+background:rgba(0,0,0,0.4);
+padding:6px;border-radius:6px;
+white-space:pre;
 }
 
 #healthBar{
-  position:absolute;
-  bottom:10px;
-  left:10px;
-  width:220px;
-  height:18px;
-  border:2px solid white;
-  background:rgba(0,0,0,0.3);
+position:absolute;bottom:10px;left:10px;
+width:220px;height:18px;
+border:2px solid white;
+background:rgba(0,0,0,0.3);
 }
-
-#healthFill{
-  width:100%;
-  height:100%;
-  background:#1e90ff;
-}
+#healthFill{width:100%;height:100%;background:#1e90ff;}
 </style>
 </head>
 
@@ -66,338 +48,233 @@ body { margin:0; overflow:hidden; background:#87cfff; }
 
 <script>
 
-// ================= SCENE =================
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87cfff);
+// ================= CORE =================
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87cfff);
 
-const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
+const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // LIGHT
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
-const sun = new THREE.DirectionalLight(0xffffff,1.5);
+const sun=new THREE.DirectionalLight(0xffffff,1.5);
 sun.position.set(10,20,10);
 scene.add(sun);
 
-// ================= DIRT GROUND (FREE TEXTURE) =================
-const tex = new THREE.TextureLoader().load(
-  "https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
+// ================= GROUND =================
+const tex=new THREE.TextureLoader().load(
+"https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
 );
+tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+tex.repeat.set(80,80);
 
-tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-tex.repeat.set(60,60);
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(5000,5000),
-  new THREE.MeshStandardMaterial({map:tex})
+const ground=new THREE.Mesh(
+new THREE.PlaneGeometry(5000,5000),
+new THREE.MeshStandardMaterial({map:tex})
 );
-
-ground.rotation.x = -Math.PI/2;
+ground.rotation.x=-Math.PI/2;
 scene.add(ground);
 
 // ================= PLAYER =================
-const player = new THREE.Object3D();
+const player=new THREE.Object3D();
 scene.add(player);
 player.add(camera);
 camera.position.set(0,2.2,0);
 
-// ================= GLOBALS =================
-let yaw = 0, pitch = 0;
-let velY = 0;
-let onGround = true;
-let aiming = false;
-let reloading = false;
-let health = 100;
-
 // ================= INPUT =================
-const keys = {};
+const keys={};
+let yaw=0,pitch=0;
+let velY=0,onGround=false;
+let aiming=false;
+
 window.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
-// ================= LOOK =================
+// LOOK
 document.addEventListener("mousemove",(e)=>{
-  if(document.pointerLockElement !== document.body) return;
+if(document.pointerLockElement!==document.body)return;
 
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.2,Math.min(1.2,pitch));
+yaw-=e.movementX*0.002;
+pitch-=e.movementY*0.002;
+pitch=Math.max(-1.2,Math.min(1.2,pitch));
 
-  player.rotation.y = yaw;
-  camera.rotation.x = pitch;
+player.rotation.y=yaw;
+camera.rotation.x=pitch;
 });
-
 document.body.addEventListener("click",()=>document.body.requestPointerLock());
 
-// ================= GRAVITY + JUMP =================
+// ================= GRAVITY =================
 window.addEventListener("keydown",(e)=>{
-  if(e.code==="Space" && onGround){
-    velY = 0.25;
-    onGround = false;
-  }
+if(e.code==="Space"&&onGround){
+velY=0.25;
+onGround=false;
+}
 });
 
 function gravity(){
-  velY -= 0.015;
-  player.position.y += velY;
-
-  if(player.position.y <= 0){
-    player.position.y = 0;
-    velY = 0;
-    onGround = true;
-  }
+velY-=0.015;
+player.position.y+=velY;
+if(player.position.y<=0){
+player.position.y=0;
+velY=0;
+onGround=true;
+}
 }
 
-// ================= MOVE =================
-function move(){
-  const speed = 0.15;
+// ================= MODELS =================
+const loader=new THREE.GLTFLoader();
+let collidables=[];
 
-  let dir = new THREE.Vector3();
-  if(keys["w"]) dir.z -= 1;
-  if(keys["s"]) dir.z += 1;
-  if(keys["a"]) dir.x -= 1;
-  if(keys["d"]) dir.x += 1;
+function addModel(url,x,y,z,s=1){
+loader.load(url,g=>{
+const o=g.scene;
+o.scale.set(s,s,s);
+o.position.set(x,y,z);
+scene.add(o);
 
-  dir.normalize();
-
-  const forward = new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
-  forward.y = 0; forward.normalize();
-
-  const right = new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
-
-  player.position.addScaledVector(forward,dir.z*speed);
-  player.position.addScaledVector(right,dir.x*speed);
+o.userData.box=new THREE.Box3();
+collidables.push(o);
+});
 }
 
-// ================= MODEL SYSTEM (ONE LINE SPAWN) =================
-const gltfLoader = new THREE.GLTFLoader();
-let collidables = [];
-
-function addModel(url,x,y,z,scale=1){
-
-  gltfLoader.load(url,(gltf)=>{
-
-    const obj = gltf.scene;
-
-    obj.scale.set(scale,scale,scale);
-    obj.position.set(x,y,z);
-
-    scene.add(obj);
-
-    // HITBOX
-    obj.userData.box = new THREE.Box3();
-    collidables.push(obj);
-  });
-
-}
-
-// ================= BARRIERS (EXAMPLES) =================
+// ================= EXAMPLES =================
 addModel("barrier.glb",0,-50,0,1);
-addModel("barrier.glb",-20,-50,0,1.2);
-addModel("barrier.glb",14.8,-41.7,0,1);
-addModel("barrier.glb",27.36,-75.47,0,1);
+addModel("barrier.glb",-20,-50,0,1);
+addModel("barrier.glb",20,-50,0,1);
 addModel("brick.glb", -11, 0, -25, 1);
 addModel("brick.glb", 1, 0, -26.50, 1);
 addModel("brick.glb", 13, 0, -25, 1);
-// ================= COLLISION =================
-function getPlayerBox(pos){
-  return new THREE.Box3().setFromCenterAndSize(
-    new THREE.Vector3(pos.x,pos.y+1,pos.z),
-    new THREE.Vector3(0.8,2,0.8)
-  );
+// ================= PLAYER BOX =================
+function box(pos){
+return new THREE.Box3().setFromCenterAndSize(
+new THREE.Vector3(pos.x,pos.y+1,pos.z),
+new THREE.Vector3(0.8,2,0.8)
+);
 }
 
-function collisionMove(){
+// ================= MOVEMENT + SLOPE =================
+const ray=new THREE.Raycaster();
 
-  const speed = 0.15;
-
-  let dir = new THREE.Vector3();
-  if(keys["w"]) dir.z -= 1;
-  if(keys["s"]) dir.z += 1;
-  if(keys["a"]) dir.x -= 1;
-  if(keys["d"]) dir.x += 1;
-
-  dir.normalize();
-
-  const forward = new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
-  forward.y = 0; forward.normalize();
-
-  const right = new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
-
-  const move = new THREE.Vector3();
-  move.addScaledVector(forward,dir.z*speed);
-  move.addScaledVector(right,dir.x*speed);
-
-  const next = player.position.clone().add(move);
-  const box = getPlayerBox(next);
-
-  let blocked = false;
-
-  for(let obj of collidables){
-    obj.userData.box.setFromObject(obj);
-    if(box.intersectsBox(obj.userData.box)){
-      blocked = true;
-      break;
-    }
-  }
-
-  if(!blocked) player.position.copy(next);
+function groundY(x,z){
+ray.set(new THREE.Vector3(x,100,z),new THREE.Vector3(0,-1,0));
+const h=ray.intersectObject(ground);
+return h.length?h[0].point.y:0;
 }
 
-// ================= WEAPON =================
-let weapon;
+function move(){
 
-gltfLoader.load("weapon.glb",(gltf)=>{
-  weapon = gltf.scene;
-  camera.add(weapon);
-  weapon.position.set(0.5,-0.9,-1.2);
-});
+const speed=0.15;
 
-// ================= SOUND =================
-const shootSound = new Audio("shoot.mp3");
-const reloadSound = new Audio("reload.mp3");
+let dir=new THREE.Vector3();
+if(keys["w"])dir.z-=1;
+if(keys["s"])dir.z+=1;
+if(keys["a"])dir.x-=1;
+if(keys["d"])dir.x+=1;
+dir.normalize();
 
-// ================= ADS =================
-const normalFov = 75;
-const aimFov = 28;
+const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
+forward.y=0;forward.normalize();
 
-// ================= SHOOT =================
-let enemies = [];
+const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
+
+const move=new THREE.Vector3();
+move.addScaledVector(forward,dir.z*speed);
+move.addScaledVector(right,dir.x*speed);
+
+const next=player.position.clone().add(move);
+
+// 🔥 SLOPE SYSTEM
+const gy=groundY(next.x,next.z);
+const slope=gy-player.position.y;
+
+// block too steep climb
+if(slope>1.2)return;
+
+// apply ground snap
+next.y=gy;
+
+let blocked=false;
+
+const pb=box(next);
+
+for(let o of collidables){
+o.userData.box.setFromObject(o);
+if(pb.intersectsBox(o.userData.box))blocked=true;
+}
+
+if(!blocked){
+player.position.copy(next);
+}
+}
+
+// ================= ENEMY =================
+let enemies=[];
 
 function addEnemy(x,y,z){
-  const e = new THREE.Mesh(
-    new THREE.BoxGeometry(1,2,1),
-    new THREE.MeshStandardMaterial({color:0xff0000})
-  );
-  e.position.set(x,y,z);
-  scene.add(e);
-  enemies.push(e);
+const e=new THREE.Mesh(
+new THREE.BoxGeometry(1,2,1),
+new THREE.MeshStandardMaterial({color:0xff0000})
+);
+e.position.set(x,y,z);
+scene.add(e);
+enemies.push(e);
 }
 
 addEnemy(5,1,-20);
-addEnemy(-3,1,-15);
 
-const raycaster = new THREE.Raycaster();
+// ================= SHOOT =================
+const raycaster=new THREE.Raycaster();
 
 function shoot(){
+raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
 
-  if(reloading) return;
+const hit=raycaster.intersectObjects(enemies);
 
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
-
-  const hits = raycaster.intersectObjects(enemies);
-
-  if(hits.length){
-
-    const e = hits[0].object;
-    e.health = (e.health||100) - 25;
-
-    if(e.health <= 0){
-      scene.remove(e);
-      enemies = enemies.filter(x=>x!==e);
-    }
-  }
-
-  shootSound.currentTime = 0;
-  shootSound.play();
-
-  if(weapon){
-    const light = new THREE.PointLight(0xffaa00,2,5);
-    weapon.add(light);
-    light.position.set(0,0,-1);
-    setTimeout(()=>weapon.remove(light),40);
-  }
+if(hit.length){
+let e=hit[0].object;
+e.health=(e.health||100)-25;
+if(e.health<=0){
+scene.remove(e);
+enemies=enemies.filter(x=>x!==e);
 }
-
-// ================= RELOAD =================
-function reload(){
-  if(reloading) return;
-  reloading = true;
-
-  reloadSound.currentTime = 0;
-  reloadSound.play();
-
-  let t = 0;
-  const base = new THREE.Vector3(0.5,-0.9,-1.2);
-  const back = new THREE.Vector3(0.2,-0.6,-0.6);
-
-  function anim(){
-    if(t < 1){
-      weapon.position.lerpVectors(base,back,t);
-      t += 0.05;
-      requestAnimationFrame(anim);
-    } else {
-      setTimeout(()=>{
-        let t2 = 0;
-        function backAnim(){
-          if(t2 < 1){
-            weapon.position.lerpVectors(back,base,t2);
-            t2 += 0.05;
-            requestAnimationFrame(backAnim);
-          } else reloading = false;
-        }
-        backAnim();
-      },200);
-    }
-  }
-  anim();
 }
-
-// ================= INPUT =================
-window.addEventListener("mousedown",(e)=>{
-  if(e.button===2) aiming = true;
-  if(e.button===0) shoot();
-});
-
-window.addEventListener("mouseup",(e)=>{
-  if(e.button===2) aiming = false;
-});
-
-window.addEventListener("keydown",(e)=>{
-  if(e.key==="r") reload();
-});
+}
 
 // ================= LOOP =================
 function animate(){
-  requestAnimationFrame(animate);
+requestAnimationFrame(animate);
 
-  collisionMove();
-  gravity();
+move();
+gravity();
 
-  camera.position.y += (2.2 + player.position.y - camera.position.y)*0.15;
+camera.position.y+=(2.2+player.position.y-camera.position.y)*0.15;
 
-  const targetFov = aiming ? aimFov : normalFov;
-  camera.fov += (targetFov-camera.fov)*0.15;
-  camera.updateProjectionMatrix();
+// ADS
+const tf=aiming?28:75;
+camera.fov+=(tf-camera.fov)*0.15;
+camera.updateProjectionMatrix();
 
-  if(weapon){
-    weapon.position.lerp(
-      aiming ?
-      new THREE.Vector3(0,-0.35,-0.45) :
-      new THREE.Vector3(0.5,-0.9,-1.2),
-      0.15
-    );
-  }
-
-  document.getElementById("coords").innerText =
-  `X:${player.position.x.toFixed(2)}
+// coords
+document.getElementById("coords").innerText=
+`X:${player.position.x.toFixed(2)}
 Y:${player.position.y.toFixed(2)}
 Z:${player.position.z.toFixed(2)}`;
 
-  document.getElementById("healthFill").style.width = health + "%";
+document.getElementById("healthFill").style.width="100%";
 
-  renderer.render(scene,camera);
+renderer.render(scene,camera);
 }
-
 animate();
 
 window.addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
 });
 
 </script>
+
 </body>
 </html>
