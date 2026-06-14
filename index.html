@@ -2,12 +2,11 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FPS CS:GO ADS ENGINE</title>
+<title>FPS FULL BUILD</title>
 
 <style>
 body { margin:0; overflow:hidden; background:#87cfff; }
 
-/* CROSSHAIR */
 #crosshair{
   position:absolute;
   top:50%;left:50%;
@@ -16,14 +15,11 @@ body { margin:0; overflow:hidden; background:#87cfff; }
   z-index:10;
 }
 #crosshair:before,#crosshair:after{
-  content:"";
-  position:absolute;
-  background:white;
+  content:"";position:absolute;background:white;
 }
 #crosshair:before{width:2px;height:10px;left:4px;}
 #crosshair:after{width:10px;height:2px;top:4px;}
 
-/* HUD */
 #coords{
   position:absolute;
   bottom:10px;right:10px;
@@ -46,39 +42,6 @@ body { margin:0; overflow:hidden; background:#87cfff; }
   width:100%;height:100%;
   background:#1e90ff;
 }
-
-/* 🔫 CS:GO SCOPE LENS */
-#scope{
-  position:absolute;
-  top:0;left:0;
-  width:100%;height:100%;
-  pointer-events:none;
-  display:none;
-
-  background:
-    radial-gradient(circle at center,
-      rgba(0,0,0,0) 0%,
-      rgba(0,0,0,0.7) 70%,
-      rgba(0,0,0,0.95) 100%);
-}
-
-#scope::after{
-  content:"";
-  position:absolute;
-  top:50%;left:50%;
-  width:2px;height:100%;
-  background:rgba(255,255,255,0.15);
-  transform:translate(-50%,-50%);
-}
-
-#scope::before{
-  content:"";
-  position:absolute;
-  top:50%;left:50%;
-  width:100%;height:2px;
-  background:rgba(255,255,255,0.15);
-  transform:translate(-50%,-50%);
-}
 </style>
 </head>
 
@@ -87,7 +50,6 @@ body { margin:0; overflow:hidden; background:#87cfff; }
 <div id="crosshair"></div>
 <div id="coords"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
-<div id="scope"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -144,7 +106,7 @@ camera.rotation.x=pitch;
 
 document.body.addEventListener("click",()=>document.body.requestPointerLock());
 
-// ================= PHYSICS =================
+// ================= GRAVITY =================
 let velY=0,onGround=true;
 
 window.addEventListener("keydown",(e)=>{
@@ -185,7 +147,7 @@ player.position.addScaledVector(forward,dir.z*speed);
 player.position.addScaledVector(right,dir.x*speed);
 }
 
-// ================= GLB ONE-LINER SYSTEM =================
+// ================= GLB SPAWN =================
 const loader=new THREE.GLTFLoader();
 let objects=[];
 
@@ -230,7 +192,7 @@ camera.add(weapon);
 weapon.position.set(0.5,-0.9,-1.2);
 });
 
-// ================= ADS (CS:GO STYLE) =================
+// ================= ADS =================
 let aiming=false;
 
 // ================= SHOOT =================
@@ -261,20 +223,18 @@ setTimeout(()=>weapon.remove(light),40);
 }
 }
 
-// ================= ADS INPUT =================
+// ================= INPUT =================
 window.addEventListener("mousedown",(e)=>{
-if(e.button===2){
-aiming=true;
-document.getElementById("scope").style.display="block";
-}
+if(e.button===2) aiming=true;
 if(e.button===0) shoot();
 });
 
 window.addEventListener("mouseup",(e)=>{
-if(e.button===2){
-aiming=false;
-document.getElementById("scope").style.display="none";
-}
+if(e.button===2) aiming=false;
+});
+
+window.addEventListener("keydown",(e)=>{
+if(e.key==="r") reloadSound.play();
 });
 
 // ================= LOOP =================
@@ -286,14 +246,13 @@ gravity();
 
 camera.position.y+=(2.2+player.position.y-camera.position.y)*0.15;
 
-// WEAPON STABLE ADS (NO FOV CHANGE!)
+// ================= ADS WEAPON (NO VISOR, ONLY LOWERING) =================
 if(weapon){
-weapon.position.lerp(
-aiming?
-new THREE.Vector3(0,0,-0.6):
-new THREE.Vector3(0.5,-0.9,-1.2),
-0.15
-);
+if(aiming){
+weapon.position.lerp(new THREE.Vector3(0,-0.55,-0.85),0.18);
+}else{
+weapon.position.lerp(new THREE.Vector3(0.5,-0.9,-1.2),0.15);
+}
 }
 
 // HUD
