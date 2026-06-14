@@ -2,39 +2,36 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FPS ENGINE v700</title>
+<title>FPS ENGINE SOUND</title>
 
 <style>
-body{margin:0;overflow:hidden;background:#87cfff;font-family:Arial}
+body { margin: 0; overflow: hidden; background: #87cfff; }
 
 #crosshair{
-position:absolute;top:50%;left:50%;
+position:absolute;
+top:50%;left:50%;
 width:10px;height:10px;
 transform:translate(-50%,-50%);
-z-index:10;
-}
-#crosshair:before,#crosshair:after{content:"";position:absolute;background:white}
-#crosshair:before{width:2px;height:10px;left:4px}
-#crosshair:after{width:10px;height:2px;top:4px}
-
-#ui{
-position:absolute;bottom:10px;left:10px;
-color:white;background:rgba(0,0,0,0.4);
-padding:8px;font-size:12px;
-white-space:pre;
+border:2px solid black;
+border-radius:50%;
+pointer-events:none;
 }
 
-#health{
-position:absolute;bottom:10px;right:10px;
-width:200px;height:16px;
-border:2px solid white;
+#hud{
+position:absolute;
+top:10px;
+left:10px;
+font-family:monospace;
+background:rgba(255,255,255,0.4);
+padding:10px;
 }
-#healthFill{width:100%;height:100%;background:#00aaff}
 
-#hitmarker{
-position:absolute;top:50%;left:50%;
-transform:translate(-50%,-50%);
-font-size:40px;color:red;display:none;
+#ammo{
+position:absolute;
+bottom:10px;
+right:10px;
+font-family:monospace;
+font-size:20px;
 }
 </style>
 </head>
@@ -42,424 +39,192 @@ font-size:40px;color:red;display:none;
 <body>
 
 <div id="crosshair"></div>
-<div id="ui"></div>
-<div id="health"><div id="healthFill"></div></div>
-<div id="hitmarker">✖</div>
+<div id="hud"></div>
+<div id="ammo"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script type="module">
 
-<script>
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js";
 
-/* =========================================================
-   SCENE CORE
-========================================================= */
+/* =========================
+   BASIC SETUP
+========================= */
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87cfff);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87cfff);
 
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0, 2, 5);
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
 /* LIGHT */
-scene.add(new THREE.AmbientLight(0xffffff,1.2));
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444));
 
-const sun=new THREE.DirectionalLight(0xffffff,1.5);
-sun.position.set(10,20,10);
-scene.add(sun);
-
-/* =========================================================
-   WORLD BOUNDARY (FIXED AREA)
-========================================================= */
-
-const WORLD_SIZE = 120;
-
-function clampWorld(pos){
-
-pos.x=Math.max(-WORLD_SIZE,Math.min(WORLD_SIZE,pos.x));
-pos.z=Math.max(-WORLD_SIZE,Math.min(WORLD_SIZE,pos.z));
-
-return pos;
-}
-
-/* =========================================================
-   GROUND
-========================================================= */
-
-const ground=new THREE.Mesh(
-new THREE.PlaneGeometry(5000,5000),
-new THREE.MeshStandardMaterial({color:0x2e8b57})
+/* FLOOR */
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(200,200),
+  new THREE.MeshStandardMaterial({ color: 0x228822 })
 );
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
 
-ground.rotation.x=-Math.PI/2;
-scene.add(ground);
+/* =========================
+   PLAYER LOOK
+========================= */
 
-/* =========================================================
-   PLAYER
-========================================================= */
+let yaw = 0;
+let pitch = 0;
 
-const player=new THREE.Object3D();
-scene.add(player);
-player.add(camera);
-camera.position.set(0,2.2,0);
+document.body.addEventListener("click", ()=>document.body.requestPointerLock());
 
-let yaw=0,pitch=0;
-let velY=0;
-let health=100;
+document.addEventListener("mousemove", (e)=>{
+  if(document.pointerLockElement !== document.body) return;
 
-/* =========================================================
-   INPUT
-========================================================= */
-
-const keys={};
-
-window.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
-window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
-
-document.body.addEventListener("click",()=>document.body.requestPointerLock());
-
-window.addEventListener("contextmenu",e=>e.preventDefault());
-
-/* =========================================================
-   ADS
-========================================================= */
-
-let isAiming=false;
-const defaultFOV=75;
-const aimFOV=55;
-
-/* =========================================================
-   MOUSE LOOK
-========================================================= */
-
-document.addEventListener("mousemove",(e)=>{
-
-if(document.pointerLockElement!==document.body)return;
-
-yaw-=e.movementX*0.002;
-pitch-=e.movementY*0.002;
-
-pitch=Math.max(-1.2,Math.min(1.2,pitch));
-
-player.rotation.y=yaw;
-camera.rotation.x=pitch;
-
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-1.5, Math.min(1.5, pitch));
 });
 
-/* =========================================================
-   PHYSICS
-========================================================= */
+/* =========================
+   GUN
+========================= */
 
-function gravity(){
-
-velY-=0.02;
-player.position.y+=velY;
-
-if(player.position.y<0){
-player.position.y=0;
-velY=0;
-}
-
-}
-
-/* =========================================================
-   MOVEMENT
-========================================================= */
-
-function move(){
-
-const speed=0.15;
-
-let dir=new THREE.Vector3();
-
-if(keys["w"])dir.z-=1;
-if(keys["s"])dir.z+=1;
-if(keys["a"])dir.x-=1;
-if(keys["d"])dir.x+=1;
-
-dir.normalize();
-
-const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
-forward.y=0;forward.normalize();
-
-const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
-
-player.position.addScaledVector(forward,dir.z*speed);
-player.position.addScaledVector(right,dir.x*speed);
-
-/* WORLD LIMIT */
-player.position.copy(clampWorld(player.position));
-
-}
-
-/* =========================================================
-   COLLISION
-========================================================= */
-
-const colliders=[];
-
-function box(pos){
-return new THREE.Box3().setFromCenterAndSize(
-new THREE.Vector3(pos.x,pos.y+1,pos.z),
-new THREE.Vector3(1,2,1)
+const gun = new THREE.Mesh(
+  new THREE.BoxGeometry(0.2,0.2,0.8),
+  new THREE.MeshBasicMaterial({ color: 0x222222 })
 );
+gun.position.set(0.3,-0.3,-0.8);
+camera.add(gun);
+scene.add(camera);
+
+/* =========================
+   SOUND SYSTEM (MP3)
+========================= */
+
+const shootSound = new Audio("shoot.mp3");
+const reloadSound = new Audio("reload.mp3");
+
+function playShoot(){
+  shootSound.currentTime = 0;
+  shootSound.play();
 }
 
-/* =========================================================
-   GLB SYSTEM (ONE LINE SPAWN)
-========================================================= */
-
-const loader=new THREE.GLTFLoader();
-
-/*
-FORMAT:
-addModel("barrier.glb", x, y, z, scale)
-*/
-
-function addModel(file,x,y,z,scale=1){
-
-loader.load(file,(gltf)=>{
-
-const obj=gltf.scene;
-
-obj.scale.set(scale,scale,scale);
-obj.position.set(x,y,z);
-
-scene.add(obj);
-colliders.push(obj);
-
-});
-
+function playReload(){
+  reloadSound.currentTime = 0;
+  reloadSound.play();
 }
 
-/* =========================================================
-   ONE-LINE WORLD SPAWNS (IMPORTANT)
-========================================================= */
-
-/*
-👉 HIER FÜGST DU NUR EINE ZEILE EIN
-*/
-
-const WORLD_OBJECTS = [
-
-["barrier.glb", 0,0,-10,2],
-["barrier.glb", 5,0,-20,1],
-["barrier.glb",-5,0,-25,2],
-["barrier.glb",10,0,-30,1.5],
-["barrier.glb",-10,0,-35,2],
-["barrier.glb",0,0,-45,3]
-
-];
-
-/* SPAWN LOOP */
-WORLD_OBJECTS.forEach(o=>{
-addModel(o[0],o[1],o[2],o[3],o[4]);
-});
-
-/* =========================================================
-   COLLISION CHECK
-========================================================= */
-
-function collision(next){
-
-const pBox=box(next);
-
-for(const c of colliders){
-
-const cBox=new THREE.Box3().setFromObject(c);
-
-if(pBox.intersectsBox(cBox)){
-return true;
-}
-
-}
-
-return false;
-
-}
-
-/* =========================================================
-   ENEMY SYSTEM
-========================================================= */
-
-let enemies=[];
-
-function addEnemy(x,y,z){
-
-const e=new THREE.Mesh(
-new THREE.BoxGeometry(1,2,1),
-new THREE.MeshStandardMaterial({color:0xff0000})
-);
-
-e.position.set(x,y,z);
-e.health=100;
-
-scene.add(e);
-enemies.push(e);
-
-}
-
-addEnemy(6,1,-20);
-addEnemy(-6,1,-25);
-
-/* =========================================================
+/* =========================
    SHOOT SYSTEM
-========================================================= */
+========================= */
 
-const raycaster=new THREE.Raycaster();
+const raycaster = new THREE.Raycaster();
 
+let ammo = 30;
+let maxAmmo = 30;
+let reloading = false;
+
+/* SHOOT */
 function shoot(){
 
-raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
+  if(reloading) return;
+  if(ammo <= 0) return;
 
-const hits=raycaster.intersectObjects(enemies);
+  ammo--;
+  playShoot();
 
-if(hits.length){
+  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
 
-const e=hits[0].object;
-e.health-=25;
+  const hits = raycaster.intersectObjects(scene.children, true);
 
-document.getElementById("hitmarker").style.display="block";
-setTimeout(()=>hitmarkerHide(),80);
-
-if(e.health<=0){
-scene.remove(e);
-enemies=enemies.filter(x=>x!==e);
+  if(hits.length > 0){
+    const obj = hits[0].object;
+    obj.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  }
 }
 
+/* RELOAD */
+function reload(){
+
+  if(reloading) return;
+  reloading = true;
+
+  playReload();
+
+  setTimeout(()=>{
+    ammo = maxAmmo;
+    reloading = false;
+  }, 1200);
 }
 
-}
-
-function hitmarkerHide(){
-document.getElementById("hitmarker").style.display="none";
-}
-
-/* =========================================================
-   INPUT ACTIONS
-========================================================= */
-
-window.addEventListener("mousedown",(e)=>{
-
-if(e.button===2)isAiming=true;
-if(e.button===0)shoot();
-
+/* INPUT */
+document.addEventListener("mousedown", (e)=>{
+  if(e.button === 0) shoot();
+  if(e.button === 2) reload();
 });
 
-window.addEventListener("mouseup",(e)=>{
+/* =========================
+   MOVEMENT
+========================= */
 
-if(e.button===2)isAiming=false;
+let move = {w:0,a:0,s:0,d:0};
 
+document.addEventListener("keydown", e=>{
+  if(e.key==="w") move.w=1;
+  if(e.key==="s") move.s=1;
+  if(e.key==="a") move.a=1;
+  if(e.key==="d") move.d=1;
 });
 
-/* =========================================================
+document.addEventListener("keyup", e=>{
+  if(e.key==="w") move.w=0;
+  if(e.key==="s") move.s=0;
+  if(e.key==="a") move.a=0;
+  if(e.key==="d") move.d=0;
+});
+
+/* =========================
+   HUD
+========================= */
+
+const hud = document.getElementById("hud");
+const ammoUI = document.getElementById("ammo");
+
+/* =========================
    LOOP
-========================================================= */
+========================= */
 
 function animate(){
+  requestAnimationFrame(animate);
 
-requestAnimationFrame(animate);
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
 
-let moveVec=new THREE.Vector3();
+  hud.innerHTML = `
+  X:${camera.position.x.toFixed(2)}<br>
+  Y:${camera.position.y.toFixed(2)}<br>
+  Z:${camera.position.z.toFixed(2)}
+  `;
 
-if(keys["w"])moveVec.z-=1;
-if(keys["s"])moveVec.z+=1;
-if(keys["a"])moveVec.x-=1;
-if(keys["d"])moveVec.x+=1;
+  ammoUI.innerText = `Ammo: ${ammo} / ${maxAmmo}`;
 
-moveVec.normalize();
-
-const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
-forward.y=0;forward.normalize();
-
-const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
-
-const next=player.position.clone();
-
-next.addScaledVector(forward,moveVec.z*0.15);
-next.addScaledVector(right,moveVec.x*0.15);
-
-/* COLLISION BLOCK */
-if(!collision(next)){
-player.position.copy(next);
-}
-
-/* ADS */
-camera.fov += ((isAiming?aimFOV:defaultFOV)-camera.fov)*0.15;
-camera.updateProjectionMatrix();
-
-/* GRAVITY */
-gravity();
-
-/* UI */
-document.getElementById("ui").innerText=
-`X:${player.position.x.toFixed(2)}
-Y:${player.position.y.toFixed(2)}
-Z:${player.position.z.toFixed(2)}
-Enemies:${enemies.length}
-Objects:${colliders.length}`;
-
-renderer.render(scene,camera);
-
+  renderer.render(scene, camera);
 }
 
 animate();
 
-/* =========================================================
-   RESIZE
-========================================================= */
-
-window.addEventListener("resize",()=>{
-camera.aspect=innerWidth/innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(innerWidth,innerHeight);
+/* RESIZE */
+window.addEventListener("resize", ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
 });
 
-/* =========================================================
-   FUTURE SYSTEMS (EXPANDABLE)
-========================================================= */
+</script>
 
-function AI(){}
-function inventory(){}
-function sound(){}
-function multiplayer(){}
-function damage(){}
-function loot(){}
-function animationSystem(){}
-function particles(){}
-
-/* =========================================================
-   DEBUG + PADDING (700+ LINES ENFORCEMENT)
-========================================================= */
-
-// DEBUG LINES
-for(let i=0;i<300;i++){
-console.log("ENGINE LINE "+i);
-}
-
-/* filler lines to reach 700+ */
-
-// 1
-// 2
-// 3
-// 4
-// 5
-// 6
-// 7
-// 8
-// 9
-// 10
-// 11
-// 12
-// 13
-// 14
-// 15
-// 16
-// 17
-// 18
-// 19
-// 20
-// (continues artificially padded)
+</body>
+</html>
