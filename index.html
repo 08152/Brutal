@@ -2,16 +2,35 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FULL FPS SYSTEM</title>
+<title>FULL FPS SYSTEM FIXED</title>
 
 <style>
-body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
+body { margin:0; overflow:hidden; background:#87cfff; }
 
+/* CROSSHAIR */
+#crosshair{
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:10px;height:10px;
+  transform:translate(-50%,-50%);
+  z-index:10;
+}
+#crosshair:before,#crosshair:after{
+  content:"";
+  position:absolute;
+  background:white;
+}
+#crosshair:before{width:2px;height:10px;left:4px;}
+#crosshair:after{width:10px;height:2px;top:4px;}
+
+/* COORDS */
 #coords{
   position:absolute;
   bottom:10px;
   right:10px;
   color:white;
+  font-family:Arial;
   font-size:13px;
   background:rgba(0,0,0,0.4);
   padding:6px;
@@ -19,6 +38,7 @@ body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
   white-space:pre;
 }
 
+/* HEALTH */
 #healthBar{
   position:absolute;
   bottom:10px;
@@ -28,7 +48,6 @@ body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
   border:2px solid white;
   background:rgba(0,0,0,0.3);
 }
-
 #healthFill{
   width:100%;
   height:100%;
@@ -39,6 +58,7 @@ body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
 
 <body>
 
+<div id="crosshair"></div>
 <div id="coords"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
 
@@ -48,39 +68,46 @@ body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
 <script>
 
 // ================= SCENE =================
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87cfff);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87cfff);
 
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
-const renderer=new THREE.WebGLRenderer({antialias:true});
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // LIGHT
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
-const sun=new THREE.DirectionalLight(0xffffff,1.5);
+const sun = new THREE.DirectionalLight(0xffffff,1.5);
 sun.position.set(10,20,10);
 scene.add(sun);
 
+// ================= GROUND =================
+const tex = new THREE.TextureLoader().load(
+"https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
+);
+tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+tex.repeat.set(60,60);
+
+const ground = new THREE.Mesh(
+new THREE.PlaneGeometry(5000,5000),
+new THREE.MeshStandardMaterial({map:tex})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
 // ================= PLAYER =================
-const player=new THREE.Object3D();
+const player = new THREE.Object3D();
 scene.add(player);
 player.add(camera);
 camera.position.set(0,2.2,0);
 
-// ================= GROUND =================
-const tex=new THREE.TextureLoader().load(
-"https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
-);
-tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-tex.repeat.set(50,50);
-
-const ground=new THREE.Mesh(
-new THREE.PlaneGeometry(5000,5000),
-new THREE.MeshStandardMaterial({map:tex})
-);
-ground.rotation.x=-Math.PI/2;
-scene.add(ground);
+// ================= GLOBALS =================
+let yaw=0,pitch=0;
+let velY=0,onGround=true;
+let aiming=false;
+let reloading=false;
+let health=100;
 
 // ================= INPUT =================
 const keys={};
@@ -88,8 +115,6 @@ window.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
 // ================= LOOK =================
-let yaw=0,pitch=0;
-
 document.addEventListener("mousemove",(e)=>{
 if(document.pointerLockElement!==document.body)return;
 
@@ -102,10 +127,15 @@ player.rotation.y=yaw;
 camera.rotation.x=pitch;
 });
 
-document.body.onclick=()=>document.body.requestPointerLock();
+document.body.addEventListener("click",()=>document.body.requestPointerLock());
 
 // ================= GRAVITY =================
-let velY=0,onGround=true;
+window.addEventListener("keydown",(e)=>{
+if(e.code==="Space" && onGround){
+velY=0.25;
+onGround=false;
+}
+});
 
 function gravity(){
 velY-=0.015;
@@ -117,46 +147,58 @@ onGround=true;
 }
 }
 
-window.addEventListener("keydown",(e)=>{
-if(e.code==="Space" && onGround){
-velY=0.25;
-onGround=false;
+// ================= MOVE =================
+function move(){
+const speed=0.15;
+
+let dir=new THREE.Vector3();
+if(keys["w"])dir.z-=1;
+if(keys["s"])dir.z+=1;
+if(keys["a"])dir.x-=1;
+if(keys["d"])dir.x+=1;
+
+dir.normalize();
+
+const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
+forward.y=0;forward.normalize();
+
+const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
+
+player.position.addScaledVector(forward,dir.z*speed);
+player.position.addScaledVector(right,dir.x*speed);
 }
-});
 
-// ================= MODEL SYSTEM (ONE LINE SPAWN) =================
-const loader=new THREE.GLTFLoader();
-
-let models=[];
+// ================= MODEL SYSTEM =================
+const gltfLoader=new THREE.GLTFLoader();
 let collidables=[];
 
+// FIX: korrekt center hitbox (nicht 100m offset)
 function addModel(url,x,y,z,scale=1){
 
-loader.load(url,(gltf)=>{
+gltfLoader.load(url,(gltf)=>{
 
 const obj=gltf.scene;
-
-obj.position.set(x,y,z);
 obj.scale.set(scale,scale,scale);
-obj.updateMatrixWorld(true);
+obj.position.set(x,y,z);
+
+// wichtig: bounding box korrekt vorbereiten
+obj.traverse((child)=>{
+  if(child.isMesh){
+    child.geometry.computeBoundingBox();
+  }
+});
 
 scene.add(obj);
 
-// REAL HITBOX (MESH BASED)
-obj.traverse((c)=>{
-if(c.isMesh){
-c.geometry.computeBoundingBox();
-c.updateMatrixWorld(true);
-}
-});
+// HITBOX FIXED
+obj.userData.box = new THREE.Box3();
 
-models.push(obj);
 collidables.push(obj);
 
 });
 }
 
-// ================= EXAMPLES =================
+// ================= BARRIERS =================
 addModel("barrier.glb",0,-50,0,1);
 addModel("barrier.glb",-20,-50,0,1.2);
 addModel("barrier.glb",14.8,-41.7,0,1);
@@ -164,8 +206,16 @@ addModel("barrier.glb",27.36,-75.47,0,1);
 addModel("brick.glb", -11, 0, -25, 1);
 addModel("brick.glb", 1, 0, -26.50, 1);
 addModel("brick.glb", 13, 0, -25, 1);
-// ================= MOVE =================
-function move(){
+// ================= PLAYER HITBOX =================
+function getPlayerBox(pos){
+return new THREE.Box3().setFromCenterAndSize(
+new THREE.Vector3(pos.x,pos.y+1,pos.z),
+new THREE.Vector3(0.6,1.8,0.6) // SMALLER = besser
+);
+}
+
+// ================= COLLISION =================
+function collisionMove(){
 
 const speed=0.15;
 
@@ -187,85 +237,151 @@ move.addScaledVector(forward,dir.z*speed);
 move.addScaledVector(right,dir.x*speed);
 
 const next=player.position.clone().add(move);
-
-// ================= HITBOX CHECK =================
-const playerBox=new THREE.Box3().setFromCenterAndSize(
-new THREE.Vector3(next.x,next.y+1,next.z),
-new THREE.Vector3(0.8,2,0.8)
-);
+const box=getPlayerBox(next);
 
 let blocked=false;
 
-for(let m of collidables){
+for(let obj of collidables){
 
-const box=new THREE.Box3().setFromObject(m);
+if(!obj.userData.box) continue;
 
-if(playerBox.intersectsBox(box)){
+// FIX: exakt am Mesh
+obj.userData.box.setFromObject(obj);
+
+if(box.intersectsBox(obj.userData.box)){
 blocked=true;
 break;
 }
-
 }
 
 if(!blocked) player.position.copy(next);
 }
 
-// ================= WEAPON =================
+// ================= WEAPON + SOUND =================
 let weapon;
 
 const shootSound=new Audio("shoot.mp3");
 const reloadSound=new Audio("reload.mp3");
 
-loader.load("weapon.glb",(gltf)=>{
+gltfLoader.load("weapon.glb",(gltf)=>{
 weapon=gltf.scene;
 camera.add(weapon);
 weapon.position.set(0.5,-0.9,-1.2);
 });
 
+// ================= ADS =================
+const normalFov=75;
+const aimFov=28;
+
 // ================= SHOOT =================
+let enemies=[];
+
+function addEnemy(x,y,z){
+const e=new THREE.Mesh(
+new THREE.BoxGeometry(1,2,1),
+new THREE.MeshStandardMaterial({color:0xff0000})
+);
+e.position.set(x,y,z);
+scene.add(e);
+enemies.push(e);
+}
+
+addEnemy(5,1,-20);
+addEnemy(-3,1,-15);
+
 const raycaster=new THREE.Raycaster();
 
+// ================= SHOOT =================
 function shoot(){
+if(reloading)return;
+
+raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
+
+const hits=raycaster.intersectObjects(enemies);
+
+if(hits.length){
+const e=hits[0].object;
+e.health=(e.health||100)-25;
+
+if(e.health<=0){
+scene.remove(e);
+enemies=enemies.filter(x=>x!==e);
+}
+}
 
 shootSound.currentTime=0;
 shootSound.play();
 
+// muzzle flash
 if(weapon){
-const light=new THREE.PointLight(0xffaa00,2,6);
+const light=new THREE.PointLight(0xffaa00,2,5);
 weapon.add(light);
 light.position.set(0,0,-1);
-setTimeout(()=>weapon.remove(light),50);
+setTimeout(()=>weapon.remove(light),40);
 }
 }
 
-// ================= ADS =================
-let aiming=false;
+// ================= RELOAD FIX =================
+function reload(){
+if(reloading)return;
+reloading=true;
 
+reloadSound.currentTime=0;
+reloadSound.play();
+
+let t=0;
+const base=new THREE.Vector3(0.5,-0.9,-1.2);
+const back=new THREE.Vector3(0.2,-0.6,-0.6);
+
+function anim(){
+if(t<1){
+weapon.position.lerpVectors(base,back,t);
+t+=0.05;
+requestAnimationFrame(anim);
+}else{
+setTimeout(()=>{
+let t2=0;
+function backAnim(){
+if(t2<1){
+weapon.position.lerpVectors(back,base,t2);
+t2+=0.05;
+requestAnimationFrame(backAnim);
+}else reloading=false;
+}
+backAnim();
+},200);
+}
+}
+anim();
+}
+
+// ================= INPUT =================
 window.addEventListener("mousedown",(e)=>{
 if(e.button===2)aiming=true;
 if(e.button===0)shoot();
 });
 
-window.addEventListener("mouseup",e=>{
+window.addEventListener("mouseup",(e)=>{
 if(e.button===2)aiming=false;
+});
+
+window.addEventListener("keydown",(e)=>{
+if(e.key==="r")reload();
 });
 
 // ================= LOOP =================
 function animate(){
 requestAnimationFrame(animate);
 
-move();
+collisionMove();
 gravity();
 
-// camera height smooth
 camera.position.y+=(2.2+player.position.y-camera.position.y)*0.15;
 
-// ADS
-const targetFov=aiming?28:75;
+const targetFov=aiming?aimFov:normalFov;
 camera.fov+=(targetFov-camera.fov)*0.15;
 camera.updateProjectionMatrix();
 
-// weapon smooth
 if(weapon){
 weapon.position.lerp(
 aiming?
@@ -275,11 +391,12 @@ new THREE.Vector3(0.5,-0.9,-1.2),
 );
 }
 
-// HUD
 document.getElementById("coords").innerText=
 `X:${player.position.x.toFixed(2)}
 Y:${player.position.y.toFixed(2)}
 Z:${player.position.z.toFixed(2)}`;
+
+document.getElementById("healthFill").style.width=health+"%";
 
 renderer.render(scene,camera);
 }
@@ -293,6 +410,5 @@ renderer.setSize(innerWidth,innerHeight);
 });
 
 </script>
-
 </body>
 </html>
