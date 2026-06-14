@@ -2,25 +2,45 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FPS CORE</title>
+<title>FULL FPS SYSTEM</title>
 
 <style>
-body{margin:0;overflow:hidden;background:#87cfff;font-family:Arial}
+body { margin:0; overflow:hidden; background:#87cfff; font-family:Arial; }
+
 #coords{
-position:absolute;bottom:10px;right:10px;
-background:rgba(0,0,0,0.4);
-color:#fff;padding:6px;border-radius:6px;font-size:13px;
-white-space:pre;
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  color:white;
+  font-size:13px;
+  background:rgba(0,0,0,0.4);
+  padding:6px;
+  border-radius:6px;
+  white-space:pre;
 }
-#health{position:absolute;bottom:10px;left:10px;width:200px;height:18px;border:2px solid #fff}
-#healthFill{width:100%;height:100%;background:#1e90ff}
+
+#healthBar{
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  width:220px;
+  height:18px;
+  border:2px solid white;
+  background:rgba(0,0,0,0.3);
+}
+
+#healthFill{
+  width:100%;
+  height:100%;
+  background:#1e90ff;
+}
 </style>
 </head>
 
 <body>
 
 <div id="coords"></div>
-<div id="health"><div id="healthFill"></div></div>
+<div id="healthBar"><div id="healthFill"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -48,7 +68,7 @@ scene.add(player);
 player.add(camera);
 camera.position.set(0,2.2,0);
 
-// ================= TEXTURES =================
+// ================= GROUND =================
 const tex=new THREE.TextureLoader().load(
 "https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
 );
@@ -69,60 +89,82 @@ window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
 // ================= LOOK =================
 let yaw=0,pitch=0;
+
 document.addEventListener("mousemove",(e)=>{
 if(document.pointerLockElement!==document.body)return;
+
 yaw-=e.movementX*0.002;
 pitch-=e.movementY*0.002;
+
 pitch=Math.max(-1.2,Math.min(1.2,pitch));
+
 player.rotation.y=yaw;
 camera.rotation.x=pitch;
 });
+
 document.body.onclick=()=>document.body.requestPointerLock();
 
-// ================= PHYSICS =================
+// ================= GRAVITY =================
 let velY=0,onGround=true;
 
 function gravity(){
 velY-=0.015;
 player.position.y+=velY;
-if(player.position.y<=0){player.position.y=0;velY=0;onGround=true;}
+if(player.position.y<=0){
+player.position.y=0;
+velY=0;
+onGround=true;
+}
 }
 
 window.addEventListener("keydown",(e)=>{
-if(e.code==="Space"&&onGround){
+if(e.code==="Space" && onGround){
 velY=0.25;
 onGround=false;
 }
 });
 
-// ================= GLB COLLISION (REAL MESH RAYCAST) =================
+// ================= MODEL SYSTEM (ONE LINE SPAWN) =================
 const loader=new THREE.GLTFLoader();
-let colliders=[];
 
-function loadBarrier(x,y,z,file="barrier.glb"){
-loader.load(file,(gltf)=>{
+let models=[];
+let collidables=[];
+
+function addModel(url,x,y,z,scale=1){
+
+loader.load(url,(gltf)=>{
+
 const obj=gltf.scene;
+
 obj.position.set(x,y,z);
+obj.scale.set(scale,scale,scale);
+obj.updateMatrixWorld(true);
+
 scene.add(obj);
 
-// store mesh triangles
-obj.traverse(c=>{
-if(c.isMesh) colliders.push(c);
+// REAL HITBOX (MESH BASED)
+obj.traverse((c)=>{
+if(c.isMesh){
+c.geometry.computeBoundingBox();
+c.updateMatrixWorld(true);
+}
 });
+
+models.push(obj);
+collidables.push(obj);
+
 });
 }
 
-// YOUR POSITIONS
-loadBarrier(0,-50,0);
-loadBarrier(-20,-50,0);
-loadBarrier(-15,-37,0);
-addModel("brick.glb", -11, 0, -25, 1);
-addModel("brick.glb", 1, 0, -26.50, 1);
-addModel("brick.glb", 13, 0, -25, 1);
-// ================= MOVE =================
-const ray=new THREE.Raycaster();
+// ================= EXAMPLES =================
+addModel("barrier.glb",0,-50,0,1);
+addModel("barrier.glb",-20,-50,0,1.2);
+addModel("barrier.glb",14.8,-41.7,0,1);
+addModel("barrier.glb",27.36,-75.47,0,1);
 
+// ================= MOVE =================
 function move(){
+
 const speed=0.15;
 
 let dir=new THREE.Vector3();
@@ -130,6 +172,7 @@ if(keys["w"])dir.z-=1;
 if(keys["s"])dir.z+=1;
 if(keys["a"])dir.x-=1;
 if(keys["d"])dir.x+=1;
+
 dir.normalize();
 
 const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
@@ -137,28 +180,37 @@ forward.y=0;forward.normalize();
 
 const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
 
-const moveVec=new THREE.Vector3();
-moveVec.addScaledVector(forward,dir.z*speed);
-moveVec.addScaledVector(right,dir.x*speed);
+const move=new THREE.Vector3();
+move.addScaledVector(forward,dir.z*speed);
+move.addScaledVector(right,dir.x*speed);
 
-const next=player.position.clone().add(moveVec);
+const next=player.position.clone().add(move);
 
-// 🔥 slope + wall detection
-ray.set(next.clone().add(new THREE.Vector3(0,2,0)),new THREE.Vector3(0,-1,0));
+// ================= HITBOX CHECK =================
+const playerBox=new THREE.Box3().setFromCenterAndSize(
+new THREE.Vector3(next.x,next.y+1,next.z),
+new THREE.Vector3(0.8,2,0.8)
+);
 
-const hits=ray.intersectObjects(colliders,true);
+let blocked=false;
 
-if(hits.length){
-const h=hits[0].point.y;
-next.y=h;
-player.position.copy(next);
-}else{
-player.position.copy(next);
+for(let m of collidables){
+
+const box=new THREE.Box3().setFromObject(m);
+
+if(playerBox.intersectsBox(box)){
+blocked=true;
+break;
 }
+
+}
+
+if(!blocked) player.position.copy(next);
 }
 
 // ================= WEAPON =================
 let weapon;
+
 const shootSound=new Audio("shoot.mp3");
 const reloadSound=new Audio("reload.mp3");
 
@@ -169,18 +221,19 @@ weapon.position.set(0.5,-0.9,-1.2);
 });
 
 // ================= SHOOT =================
-function muzzle(){
-if(!weapon)return;
+const raycaster=new THREE.Raycaster();
+
+function shoot(){
+
+shootSound.currentTime=0;
+shootSound.play();
+
+if(weapon){
 const light=new THREE.PointLight(0xffaa00,2,6);
 weapon.add(light);
 light.position.set(0,0,-1);
 setTimeout(()=>weapon.remove(light),50);
 }
-
-function shoot(){
-shootSound.currentTime=0;
-shootSound.play();
-muzzle();
 }
 
 // ================= ADS =================
@@ -190,6 +243,7 @@ window.addEventListener("mousedown",(e)=>{
 if(e.button===2)aiming=true;
 if(e.button===0)shoot();
 });
+
 window.addEventListener("mouseup",e=>{
 if(e.button===2)aiming=false;
 });
@@ -201,16 +255,15 @@ requestAnimationFrame(animate);
 move();
 gravity();
 
-// camera smooth height
-const targetY=2.2+player.position.y;
-camera.position.y+=(targetY-camera.position.y)*0.15;
+// camera height smooth
+camera.position.y+=(2.2+player.position.y-camera.position.y)*0.15;
 
-// ADS (no zoom bug)
-const targetFov=aiming?30:75;
+// ADS
+const targetFov=aiming?28:75;
 camera.fov+=(targetFov-camera.fov)*0.15;
 camera.updateProjectionMatrix();
 
-// weapon position
+// weapon smooth
 if(weapon){
 weapon.position.lerp(
 aiming?
@@ -228,6 +281,7 @@ Z:${player.position.z.toFixed(2)}`;
 
 renderer.render(scene,camera);
 }
+
 animate();
 
 window.addEventListener("resize",()=>{
@@ -237,5 +291,6 @@ renderer.setSize(innerWidth,innerHeight);
 });
 
 </script>
+
 </body>
 </html>
