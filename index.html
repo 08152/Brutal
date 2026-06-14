@@ -2,12 +2,11 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FULL FPS SYSTEM FIXED</title>
+<title>FULL FPS SYSTEM</title>
 
 <style>
 body { margin:0; overflow:hidden; background:#87cfff; }
 
-/* CROSSHAIR */
 #crosshair{
   position:absolute;
   top:50%;
@@ -24,7 +23,6 @@ body { margin:0; overflow:hidden; background:#87cfff; }
 #crosshair:before{width:2px;height:10px;left:4px;}
 #crosshair:after{width:10px;height:2px;top:4px;}
 
-/* COORDS */
 #coords{
   position:absolute;
   bottom:10px;
@@ -38,7 +36,6 @@ body { margin:0; overflow:hidden; background:#87cfff; }
   white-space:pre;
 }
 
-/* HEALTH */
 #healthBar{
   position:absolute;
   bottom:10px;
@@ -172,25 +169,18 @@ player.position.addScaledVector(right,dir.x*speed);
 const gltfLoader=new THREE.GLTFLoader();
 let collidables=[];
 
-// FIX: korrekt center hitbox (nicht 100m offset)
 function addModel(url,x,y,z,scale=1){
 
 gltfLoader.load(url,(gltf)=>{
 
 const obj=gltf.scene;
+
 obj.scale.set(scale,scale,scale);
 obj.position.set(x,y,z);
 
-// wichtig: bounding box korrekt vorbereiten
-obj.traverse((child)=>{
-  if(child.isMesh){
-    child.geometry.computeBoundingBox();
-  }
-});
-
 scene.add(obj);
 
-// HITBOX FIXED
+// ================= HITBOX FIX (50% SMALLER) =================
 obj.userData.box = new THREE.Box3();
 
 collidables.push(obj);
@@ -203,18 +193,16 @@ addModel("barrier.glb",0,-50,0,1);
 addModel("barrier.glb",-20,-50,0,1.2);
 addModel("barrier.glb",14.8,-41.7,0,1);
 addModel("barrier.glb",27.36,-75.47,0,1);
-addModel("brick.glb", -11, 0, -25, 1);
-addModel("brick.glb", 1, 0, -26.50, 1);
-addModel("brick.glb", 13, 0, -25, 1);
+
 // ================= PLAYER HITBOX =================
 function getPlayerBox(pos){
 return new THREE.Box3().setFromCenterAndSize(
 new THREE.Vector3(pos.x,pos.y+1,pos.z),
-new THREE.Vector3(0.6,1.8,0.6) // SMALLER = besser
+new THREE.Vector3(0.6,1.8,0.6)
 );
 }
 
-// ================= COLLISION =================
+// ================= COLLISION (FIXED 50% HITBOX) =================
 function collisionMove(){
 
 const speed=0.15;
@@ -243,10 +231,15 @@ let blocked=false;
 
 for(let obj of collidables){
 
-if(!obj.userData.box) continue;
-
-// FIX: exakt am Mesh
 obj.userData.box.setFromObject(obj);
+
+const center=obj.userData.box.getCenter(new THREE.Vector3());
+const size=obj.userData.box.getSize(new THREE.Vector3());
+
+// 🔥 50% HITBOX REDUCTION
+size.multiplyScalar(0.5);
+
+obj.userData.box.setFromCenterAndSize(center,size);
 
 if(box.intersectsBox(obj.userData.box)){
 blocked=true;
@@ -254,14 +247,11 @@ break;
 }
 }
 
-if(!blocked) player.position.copy(next);
+if(!blocked)player.position.copy(next);
 }
 
-// ================= WEAPON + SOUND =================
+// ================= WEAPON =================
 let weapon;
-
-const shootSound=new Audio("shoot.mp3");
-const reloadSound=new Audio("reload.mp3");
 
 gltfLoader.load("weapon.glb",(gltf)=>{
 weapon=gltf.scene;
@@ -269,11 +259,15 @@ camera.add(weapon);
 weapon.position.set(0.5,-0.9,-1.2);
 });
 
+// ================= SOUND =================
+const shootSound=new Audio("shoot.mp3");
+const reloadSound=new Audio("reload.mp3");
+
 // ================= ADS =================
 const normalFov=75;
 const aimFov=28;
 
-// ================= SHOOT =================
+// ================= ENEMIES =================
 let enemies=[];
 
 function addEnemy(x,y,z){
@@ -311,17 +305,9 @@ enemies=enemies.filter(x=>x!==e);
 
 shootSound.currentTime=0;
 shootSound.play();
-
-// muzzle flash
-if(weapon){
-const light=new THREE.PointLight(0xffaa00,2,5);
-weapon.add(light);
-light.position.set(0,0,-1);
-setTimeout(()=>weapon.remove(light),40);
-}
 }
 
-// ================= RELOAD FIX =================
+// ================= RELOAD =================
 function reload(){
 if(reloading)return;
 reloading=true;
@@ -329,30 +315,7 @@ reloading=true;
 reloadSound.currentTime=0;
 reloadSound.play();
 
-let t=0;
-const base=new THREE.Vector3(0.5,-0.9,-1.2);
-const back=new THREE.Vector3(0.2,-0.6,-0.6);
-
-function anim(){
-if(t<1){
-weapon.position.lerpVectors(base,back,t);
-t+=0.05;
-requestAnimationFrame(anim);
-}else{
-setTimeout(()=>{
-let t2=0;
-function backAnim(){
-if(t2<1){
-weapon.position.lerpVectors(back,base,t2);
-t2+=0.05;
-requestAnimationFrame(backAnim);
-}else reloading=false;
-}
-backAnim();
-},200);
-}
-}
-anim();
+setTimeout(()=>reloading=false,1200);
 }
 
 // ================= INPUT =================
