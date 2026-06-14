@@ -203,6 +203,22 @@ player.position.addScaledVector(right,dir.x*speed);
 ========================================================= */
 
 const barriers=[];
+   function addBarrier(x,y,z,scale=1){
+
+loader.load("barrier.glb",(gltf)=>{
+
+const obj=gltf.scene.clone();
+
+obj.scale.set(scale,scale,scale);
+
+obj.position.set(x,y,z);
+
+scene.add(obj);
+barriers.push(obj);
+
+});
+
+}
 
 function getBox(pos){
 return new THREE.Box3().setFromCenterAndSize(
@@ -254,7 +270,10 @@ if(!blocked) player.position.copy(next);
 /* =========================================================
    ENEMIES
 ========================================================= */
-
+addBarrier(0,0,-10,1);
+addBarrier(5,0,-20,1);
+addBarrier(-5,0,-30,1);
+   
 let enemies=[];
 
 function addEnemy(x,y,z){
