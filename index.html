@@ -2,41 +2,44 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>FULL FPS ENGINE</title>
+<title>FPS FULL ENGINE</title>
 
 <style>
-body{margin:0;overflow:hidden;background:#87cfff}
+body { margin:0; overflow:hidden; background:#87cfff; }
 
 #crosshair{
-position:absolute;top:50%;left:50%;
-width:10px;height:10px;
-transform:translate(-50%,-50%);
-z-index:10;
+  position:absolute;top:50%;left:50%;
+  width:10px;height:10px;
+  transform:translate(-50%,-50%);
+  z-index:10;
 }
-#crosshair:before,#crosshair:after{content:"";position:absolute;background:white}
-#crosshair:before{width:2px;height:10px;left:4px}
-#crosshair:after{width:10px;height:2px;top:4px}
+#crosshair:before,#crosshair:after{
+  content:"";position:absolute;background:white;
+}
+#crosshair:before{width:2px;height:10px;left:4px;}
+#crosshair:after{width:10px;height:2px;top:4px;}
 
 #coords{
-position:absolute;bottom:10px;right:10px;
-color:white;font-family:Arial;font-size:13px;
-background:rgba(0,0,0,0.4);
-padding:6px;border-radius:6px;
-white-space:pre;
+  position:absolute;
+  bottom:10px;right:10px;
+  color:white;
+  font-family:Arial;
+  font-size:13px;
+  background:rgba(0,0,0,0.4);
+  padding:6px;
+  white-space:pre;
 }
 
 #healthBar{
-position:absolute;bottom:10px;left:10px;
-width:220px;height:18px;
-border:2px solid white;
-background:rgba(0,0,0,0.3);
+  position:absolute;
+  bottom:10px;left:10px;
+  width:220px;height:18px;
+  border:2px solid white;
+  background:rgba(0,0,0,0.3);
 }
-#healthFill{width:100%;height:100%;background:#1e90ff}
-
-#hitmarker{
-position:absolute;top:50%;left:50%;
-transform:translate(-50%,-50%);
-font-size:40px;color:red;display:none;
+#healthFill{
+  width:100%;height:100%;
+  background:#1e90ff;
 }
 </style>
 </head>
@@ -46,17 +49,13 @@ font-size:40px;color:red;display:none;
 <div id="crosshair"></div>
 <div id="coords"></div>
 <div id="healthBar"><div id="healthFill"></div></div>
-<div id="hitmarker">✖</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <script>
 
-/* =========================================================
-   SCENE CORE
-========================================================= */
-
+// ================= CORE =================
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87cfff);
 
@@ -65,123 +64,60 @@ const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
-/* LIGHT */
+// LIGHT
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
 const sun=new THREE.DirectionalLight(0xffffff,1.5);
 sun.position.set(10,20,10);
 scene.add(sun);
 
-/* =========================================================
-   GROUND
-========================================================= */
-
-const tex=new THREE.TextureLoader().load(
-"https://threejs.org/examples/textures/terrain/grasslight-big.jpg"
-);
-
-tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-tex.repeat.set(50,50);
-
+// ================= GROUND =================
 const ground=new THREE.Mesh(
-new THREE.PlaneGeometry(5000,5000),
-new THREE.MeshStandardMaterial({map:tex})
+  new THREE.PlaneGeometry(5000,5000),
+  new THREE.MeshStandardMaterial({color:0x3a8f3a})
 );
-
 ground.rotation.x=-Math.PI/2;
 scene.add(ground);
 
-/* =========================================================
-   PLAYER
-========================================================= */
-
+// ================= PLAYER =================
 const player=new THREE.Object3D();
 scene.add(player);
 player.add(camera);
 camera.position.set(0,2.2,0);
 
-let yaw=0,pitch=0;
-let velY=0,onGround=true;
-let health=100;
-
-/* =========================================================
-   ADS SYSTEM (NEW)
-========================================================= */
-
-let isAiming=false;
-
-const defaultFOV=75;
-const aimFOV=60;
-
-/* =========================================================
-   INPUT
-========================================================= */
-
+// ================= INPUT =================
 const keys={};
-
 window.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
-document.body.addEventListener("click",()=>document.body.requestPointerLock());
-
-/* RIGHT CLICK AIM */
-window.addEventListener("contextmenu",e=>e.preventDefault());
-
-window.addEventListener("mousedown",(e)=>{
-if(e.button===2){ // right click
-isAiming=true;
-}
-if(e.button===0){
-shoot();
-}
-});
-
-window.addEventListener("mouseup",(e)=>{
-if(e.button===2){
-isAiming=false;
-}
-});
-
-/* =========================================================
-   MOUSE LOOK
-========================================================= */
-
+// ================= LOOK =================
+let yaw=0,pitch=0;
 document.addEventListener("mousemove",(e)=>{
 if(document.pointerLockElement!==document.body)return;
-
 yaw-=e.movementX*0.002;
 pitch-=e.movementY*0.002;
-
 pitch=Math.max(-1.2,Math.min(1.2,pitch));
-
 player.rotation.y=yaw;
 camera.rotation.x=pitch;
 });
+document.body.addEventListener("click",()=>document.body.requestPointerLock());
 
-/* =========================================================
-   GRAVITY
-========================================================= */
+// ================= PHYSICS =================
+let velY=0,onGround=true;
+
+window.addEventListener("keydown",(e)=>{
+if(e.code==="Space"&&onGround){velY=0.25;onGround=false;}
+});
 
 function gravity(){
 velY-=0.015;
 player.position.y+=velY;
-
-if(player.position.y<=0){
-player.position.y=0;
-velY=0;
-onGround=true;
-}
+if(player.position.y<=0){player.position.y=0;velY=0;onGround=true;}
 }
 
-/* =========================================================
-   MOVEMENT
-========================================================= */
-
+// ================= MOVEMENT =================
 function move(){
-
 const speed=0.15;
-
 let dir=new THREE.Vector3();
-
 if(keys["w"])dir.z-=1;
 if(keys["s"])dir.z+=1;
 if(keys["a"])dir.x-=1;
@@ -198,91 +134,66 @@ player.position.addScaledVector(forward,dir.z*speed);
 player.position.addScaledVector(right,dir.x*speed);
 }
 
-/* =========================================================
-   COLLISION SYSTEM
-========================================================= */
+// ================= LOADERS =================
+const loader=new THREE.GLTFLoader();
 
-const barriers=[];
+// ================= GLOBAL OBJECTS =================
+let objects=[];
 
-function getBox(pos){
-return new THREE.Box3().setFromCenterAndSize(
-new THREE.Vector3(pos.x,pos.y+1,pos.z),
-new THREE.Vector3(0.8,2,0.8)
-);
+// ================= AUTO SNAP TO GROUND =================
+function snapToGround(obj){
+const ray=new THREE.Raycaster();
+ray.set(new THREE.Vector3(obj.position.x,50,obj.position.z), new THREE.Vector3(0,-1,0));
+
+const hit=ray.intersectObject(ground);
+if(hit.length) obj.position.y=hit[0].point.y;
 }
 
-function moveCollision(){
+// ================= SPAWN SYSTEM (ONE LINE MAGIC) =================
+function spawnModel(path,x,y,z,scale=1){
+loader.load(path,(gltf)=>{
+const obj=gltf.scene;
+obj.scale.set(scale,scale,scale);
+obj.position.set(x,y,z);
 
-const speed=0.15;
+snapToGround(obj);
 
-let dir=new THREE.Vector3();
-
-if(keys["w"])dir.z-=1;
-if(keys["s"])dir.z+=1;
-if(keys["a"])dir.x-=1;
-if(keys["d"])dir.x+=1;
-
-dir.normalize();
-
-const forward=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
-forward.y=0;forward.normalize();
-
-const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).negate();
-
-const move=new THREE.Vector3();
-
-move.addScaledVector(forward,dir.z*speed);
-move.addScaledVector(right,dir.x*speed);
-
-const next=player.position.clone().add(move);
-
-const box=getBox(next);
-
-let blocked=false;
-
-for(const b of barriers){
-const meshBox=new THREE.Box3().setFromObject(b);
-if(box.intersectsBox(meshBox)){
-blocked=true;
-break;
+obj.traverse(c=>{
+if(c.isMesh){
+c.castShadow=true;
+c.receiveShadow=true;
 }
+});
+
+scene.add(obj);
+objects.push(obj);
+});
 }
 
-if(!blocked) player.position.copy(next);
-}
+// ================= BARRIERS =================
+spawnModel("barrier.glb",0,-50,0,1);
+spawnModel("barrier.glb",-10,-50,0,1.2);
+spawnModel("barrier.glb",10,-50,0,1);
 
-/* =========================================================
-   ENEMIES
-========================================================= */
-
+// ================= ENEMIES =================
 let enemies=[];
-
-function addEnemy(x,y,z){
+function spawnEnemy(x,y,z){
 const e=new THREE.Mesh(
 new THREE.BoxGeometry(1,2,1),
 new THREE.MeshStandardMaterial({color:0xff0000})
 );
-
 e.position.set(x,y,z);
-e.health=100;
-
 scene.add(e);
 enemies.push(e);
 }
 
-addEnemy(5,1,-20);
-addEnemy(-3,1,-15);
+spawnEnemy(5,1,-20);
+spawnEnemy(-3,1,-15);
 
-/* =========================================================
-   WEAPON
-========================================================= */
-
+// ================= WEAPON =================
 let weapon;
-
 const shootSound=new Audio("shoot.mp3");
 const reloadSound=new Audio("reload.mp3");
-
-const loader=new THREE.GLTFLoader();
 
 loader.load("weapon.glb",(gltf)=>{
 weapon=gltf.scene;
@@ -290,81 +201,135 @@ camera.add(weapon);
 weapon.position.set(0.5,-0.9,-1.2);
 });
 
-/* =========================================================
-   SHOOT SYSTEM
-========================================================= */
+// ================= ADS =================
+let aiming=false;
+const normalFov=75;
+const aimFov=28;
 
+// ================= SHOOT =================
 const raycaster=new THREE.Raycaster();
 
-function hitmarker(){
-const h=document.getElementById("hitmarker");
-h.style.display="block";
-setTimeout(()=>h.style.display="none",100);
-}
-
-function muzzleFlash(){
-if(!weapon)return;
-const light=new THREE.PointLight(0xffaa00,2,6);
-weapon.add(light);
-light.position.set(0,0,-1);
-setTimeout(()=>weapon.remove(light),50);
-}
-
 function shoot(){
+if(!weapon)return;
+
+shootSound.currentTime=0;
+shootSound.play();
 
 raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
 
 const hits=raycaster.intersectObjects(enemies);
-
 if(hits.length){
 const e=hits[0].object;
-e.health-=25;
-
-hitmarker();
-
+e.health=(e.health||100)-25;
 if(e.health<=0){
 scene.remove(e);
 enemies=enemies.filter(x=>x!==e);
 }
 }
 
-shootSound.currentTime=0;
-shootSound.play();
-muzzleFlash();
+// muzzle flash
+const light=new THREE.PointLight(0xffaa00,2,5);
+weapon.add(light);
+light.position.set(0,0,-1);
+setTimeout(()=>weapon.remove(light),40);
 }
 
-/* =========================================================
-   LOOP
-========================================================= */
+// ================= RELOAD =================
+let reloading=false;
 
+function reload(){
+if(reloading)return;
+reloading=true;
+
+reloadSound.currentTime=0;
+reloadSound.play();
+
+let t=0;
+const base=new THREE.Vector3(0.5,-0.9,-1.2);
+const back=new THREE.Vector3(0.2,-0.6,-0.6);
+
+(function anim(){
+if(t<1){
+weapon.position.lerpVectors(base,back,t);
+t+=0.05;
+requestAnimationFrame(anim);
+}else{
+setTimeout(()=>{
+let t2=0;
+(function backAnim(){
+if(t2<1){
+weapon.position.lerpVectors(back,base,t2);
+t2+=0.05;
+requestAnimationFrame(backAnim);
+}else reloading=false;
+})();
+},200);
+}
+})();
+}
+
+// ================= COLLISION (SIMPLE MESH RAY HIT) =================
+function getPlayerBox(){
+return new THREE.Box3().setFromCenterAndSize(
+new THREE.Vector3(player.position.x,player.position.y+1,player.position.z),
+new THREE.Vector3(0.8,2,0.8)
+);
+}
+
+function collision(){
+const next=player.position.clone();
+
+let box=getPlayerBox();
+
+for(let obj of objects){
+const objBox=new THREE.Box3().setFromObject(obj);
+if(box.intersectsBox(objBox)){
+return true;
+}
+}
+return false;
+}
+
+// ================= INPUT =================
+window.addEventListener("mousedown",(e)=>{
+if(e.button===2)aiming=true;
+if(e.button===0)shoot();
+});
+window.addEventListener("mouseup",(e)=>{
+if(e.button===2)aiming=false;
+});
+window.addEventListener("keydown",(e)=>{
+if(e.key==="r")reload();
+});
+
+// ================= LOOP =================
 function animate(){
-
 requestAnimationFrame(animate);
 
 move();
-moveCollision();
 gravity();
 
-/* ADS CAMERA FOV */
-camera.fov += ((isAiming?aimFOV:defaultFOV) - camera.fov)*0.15;
-camera.updateProjectionMatrix();
-
-/* WEAPON ADS POSITION */
-if(weapon){
-const targetX=isAiming?0:0.5;
-const targetY=isAiming?-0.5:-0.9;
-const targetZ=isAiming?-0.8:-1.2;
-
-weapon.position.x += (targetX-weapon.position.x)*0.2;
-weapon.position.y += (targetY-weapon.position.y)*0.2;
-weapon.position.z += (targetZ-weapon.position.z)*0.2;
-}
+const old=player.position.clone();
+if(!collision()){}else player.position.copy(old);
 
 camera.position.y+=(2.2+player.position.y-camera.position.y)*0.15;
 
+camera.fov+=(aiming?aimFov:normalFov-camera.fov)*0.15;
+camera.updateProjectionMatrix();
+
+if(weapon){
+weapon.position.lerp(
+aiming?
+new THREE.Vector3(0,-0.35,-0.45):
+new THREE.Vector3(0.5,-0.9,-1.2),
+0.15
+);
+}
+
+// HUD
 const dir=new THREE.Vector3(0,0,-1).applyEuler(player.rotation);
 
-document.getElementById("coords").innerHTML=
+document.getElementById("coords").innerText=
 `X:${player.position.x.toFixed(2)}
 Y:${player.position.y.toFixed(2)}
 Z:${player.position.z.toFixed(2)}
@@ -372,30 +337,18 @@ Z:${player.position.z.toFixed(2)}
 DIR X:${dir.x.toFixed(2)}
 DIR Z:${dir.z.toFixed(2)}`;
 
-document.getElementById("healthFill").style.width=health+"%";
+document.getElementById("healthFill").style.width="100%";
 
 renderer.render(scene,camera);
 }
 
 animate();
 
-/* =========================================================
-   RESIZE
-========================================================= */
-
 window.addEventListener("resize",()=>{
 camera.aspect=innerWidth/innerHeight;
 camera.updateProjectionMatrix();
 renderer.setSize(innerWidth,innerHeight);
 });
-
-/* =========================================================
-   ENGINE PADDING (kept)
-========================================================= */
-
-for(let i=0;i<120;i++){
-// reserved expansion
-}
 
 </script>
 </body>
